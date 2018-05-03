@@ -1,0 +1,37 @@
+`timescale 1ns / 1ps
+
+module layer78_tb;
+
+reg clk;
+reg rstn;
+reg[11:0]y8;
+reg[11:0]y7;
+reg[11:0]R88;
+reg[11:0]R77;
+reg[11:0]R78;
+wire [191:0]ped_2;
+wire [191:0]sign_2_1;
+wire [191:0]sign_2_2;
+
+
+layer78 layer78(.clk(clk),.rstn(rstn),.y8(y8),.y7(y7),.R88(R88),.R78(R78),.R77(R77),.ped_2(ped_2),.sign_2_1(sign_2_1),.sign_2_2(sign_2_2));
+
+initial begin
+		
+                clk = 0;
+                rstn = 0;
+                #20 rstn = 1;
+		#20 
+		y8 = 12'b0000_0101_1110;
+		y7 = 12'b1111_1101_0100;
+		R88 = 12'b0000_0010_1101;
+		R77 = 12'b1111_1101_0011;
+		R78 = 12'b0; 
+                #5000 $finish;
+        end
+
+ always begin
+          #5 clk = ~clk;
+
+end
+endmodule
