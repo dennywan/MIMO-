@@ -16,7 +16,7 @@ module layer78(clk,rstn,y8,y7,R88,R78,R77,ped_2,sign_2_1,sign_2_2);
 input clk,rstn;
 input signed[11:0]y8,y7,R88,R78,R77;
 reg  signed[11:0]s8,s7;
-reg  signed[11:0]stotal[0:7];
+reg  signed[11:0]stotal[0:1];
 reg  signed[11:0]s8f[0:3];
 reg  signed[11:0]s7f[0:31];
 
@@ -37,7 +37,7 @@ output reg [191:0]sign_2_1;
 output reg [191:0]sign_2_2;
 
 reg [4:0]i;
-reg [3:0]np;
+
 reg  signed[11:0]temp[0:15];
 reg  [3:0]temp1[0:15];
 reg  [3:0]index_2[0:15];
@@ -63,15 +63,16 @@ always @ (posedge clk or negedge rstn) begin
 		s7f[i]<=12'b0;
 		end
 		for(i=0;i<16;i=i+1)begin
-		index_2[i]=4'd0+i;
+		index_2[i]=i;
 		end
 		
 	end
 	
-	else begin
-     	s8 = y8 / R88;//算每一個s8的值
+	else 
+	begin
+     	s8 = div(y8,R88);//算每一個s8的值
 	 
-     	s7 = ( y7- R78 * s8 ) / R77 ;//算每一個s7的值
+     	s7 = div( (y7- mul(R78,s8)),R77) ;//算每一個s7的值
 
 		stotal[0] <= s8;//
      	stotal[1] <= s7;
@@ -79,61 +80,66 @@ always @ (posedge clk or negedge rstn) begin
 		{s8f[3],s8f[2],s8f[1],s8f[0]} = eli(stotal[0]);
 		//範圍重取且排續
 		
-		for(i=0;i<8;i=i+1'b1)begin
+		for(i=0;i<8;i=i+1'b1)
+		begin
      		{s7f[4*i+3],s7f[4*i+2],s7f[4*i+1],s7f[4*i]} = eli(stotal[1]);
 		end
 		
-		for(n=0;n<4;n=n+1'b1)begin
-    		error_1[n] = y8 - s8f[n]*R88;
-		ped_1[n] = error_1[n]*error_1[n];
-		sign_buffer_1[n] = s8f[n];
+		for(n=0;n<4;n=n+1'b1)
+		begin
+    	error_1[n] = y8 - mul( s8f[n],R88 );
+		ped_1[n] = mul(error_1[n] , error_1[n]);
+		sign_buffer_1[n] = s8f[n];//這裡有可能接太多條線
 		end
 		
 		
-		for(n=0;n<4;n=n+1'b1)begin
-		ped_reg_1 [n] = ped_1[n];
+		for(n=0;n<4;n=n+1'b1)
+		begin
+		ped_reg_1 [n] = ped_1[n];//看要不要去掉
 			
 			//算error
-			for(i=0;i<4;i=i+1'b1)begin
-      			error_2[4*(n+i)] = y7-s7f[n]*R77; 
+			for(i=0;i<4;i=i+1'b1)
+			begin
+      			error_2[4*(n)+i] = y7-mul(s7f[n] ,R77 ); 
 	 		end
 			
 			//ped_2
-			for(i=0;i<4;i=i+1'b1)begin                  
-      			ped_2_reg[4*(n)+i]   = ped_reg_1[n]+ error_2[4*(n)+i]*error_2[4*(n)+i];
+			for(i=0;i<4;i=i+1'b1)
+			begin                  
+      			ped_2_reg[4*(n)+i]   = ped_reg_1[n]+ mul( error_2[4*(n)+i], error_2[4*(n)+i]);
 	  		end
 			
 			//s7
-			for(i=0;i<4;i=i+1'b1)begin 
+			for(i=0;i<4;i=i+1'b1)
+			begin 
       			sign_buffer_2_1[4*(n)+i]   = s7f[4*(n)+i];
 	  		end
 			//s8
-			for(i=0;i<4;i=i+1'b1)begin
+			for(i=0;i<4;i=i+1'b1)
+			begin
       			sign_buffer_2_2[4*(n)+i]   = sign_buffer_1[n];
 	  		end		
 		end
 		
 		//sort ped2
-		for(i=0;i<16;i=i+1'b1)begin
-
-		np=i;
-		
-			for(j=i+1'b1;j<17;j=j+1'b1)begin
-		
-			if(ped_2[j]<ped_2[i])begin
-			temp[i]	=	ped_2[i];
-			ped_2[i]	=	ped_2[np];
-			ped_2[np]	=	temp[i];
+		for(i=0;i<16;i=i+1'b1)
+		begin	
+			for(j=i+1'b1;j<16;j=j+1'b1)//17->16
+		    if(ped_2_reg[j]<ped_2_reg[i])
+			begin
+			temp[i]	=	ped_2_reg[i];
+			ped_2_reg[i]	=	ped_2_reg[j];
+			ped_2_reg[j]	=	temp[i];
 			temp1[i]	=	index_2[i];
-			index_2[i]	=	index_2[np];
-			index_2[np]	=	temp1[i];
+			index_2[i]	=	index_2[j];
+			index_2[j]	=	temp1[i];
 			end
-			
-		end
+
 		end
 		
 		//sort s8 s7
-		for(i=0;i<16;i=i+1'b1)begin
+		for(i=0;i<16;i=i+1'b1)
+		begin
     	sign_2_1_reg[i] = sign_buffer_2_1[ index_2[i] ];//把前面的s7值排序
 		sign_2_2_reg[i] = sign_buffer_2_2[ index_2[i] ];//把前面的s8值排序
 		end
@@ -142,18 +148,22 @@ always @ (posedge clk or negedge rstn) begin
 	
 		
 		//轉一維
-		for(i=0;i<16;i=i+1'b1)begin
+		for(i=0;i<16;i=i+1'b1)
+		begin
 		ped_2[12*i+:12]<=ped_2_reg[i];
 		sign_2_1[12*i+:12]<=sign_2_1_reg[i];
 		sign_2_2[12*i+:12]<=sign_2_2_reg[i];
 		end
 	end
 
-////////////////////////////////////////////結合是列舉CE
+
+end
+
+////////////////////////////////////////////結合式列舉CE
 	function [47:0]eli;
-	input reg signed[11:0]x;
+	input signed[11:0]x;
     reg signed[11:0]s8f[0:3];
-	parameter signed sqrt_42 =	12'b0_110_0111_1011;//6.4807406984
+	parameter signed sqrt_42   = 12'b0_110_0111_1011 ;//6.4807406984
 	parameter signed sqrt_42_7 = 12'b0_001_0001_0100 ;//1.080123449
 	parameter signed sqrt_42_6 = 12'b0_000_1110_1101 ;//0.925800998
 	parameter signed sqrt_42_5 = 12'b0_000_1100_0101 ;//
@@ -162,7 +172,7 @@ always @ (posedge clk or negedge rstn) begin
 	parameter signed sqrt_42_2 = 12'b0_000_0100_1111 ;//
 	parameter signed sqrt_42_1 = 12'b0_000_0010_0111 ;//
 	           
-	parameter signed sqrt_42_m = 	12'b1_001_1000_0101;
+	parameter signed sqrt_42_m   = 	    12'b1_001_1000_0101;//負數軸
 	parameter signed sqrt_42_7_m =  	12'b1_110_1110_1100;
 	parameter signed sqrt_42_6_m =  	12'b1_111_0001_0011;
 	parameter signed sqrt_42_5_m =  	12'b1_111_0011_1011;
@@ -173,7 +183,8 @@ always @ (posedge clk or negedge rstn) begin
               
     begin
 		
-        if(sqrt_42_6 < x)begin
+        if(sqrt_42_6 < x)
+		begin
             s8f[0]=sqrt_42_7;
             s8f[1]=sqrt_42_5;
             s8f[2]=sqrt_42_3;
@@ -181,7 +192,8 @@ always @ (posedge clk or negedge rstn) begin
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
 		end
 		
-        else if(sqrt_42_5<=x && x<sqrt_42_6)begin   
+        else if(sqrt_42_5<=x && x<sqrt_42_6)
+		begin   
             s8f[0]=sqrt_42_5;
             s8f[1]=sqrt_42_7;
             s8f[2]=sqrt_42_3;
@@ -189,7 +201,8 @@ always @ (posedge clk or negedge rstn) begin
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
 		end
 		
-        else if(sqrt_42_4<=x && x<sqrt_42_5) begin  
+        else if(sqrt_42_4<=x && x<sqrt_42_5) 
+		begin  
             s8f[0]=sqrt_42_5;
             s8f[1]=sqrt_42_3;
             s8f[2]=sqrt_42_7;
@@ -197,85 +210,97 @@ always @ (posedge clk or negedge rstn) begin
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
 		end		
 		
-        else if(sqrt_42_3<=x && x<sqrt_42_4)begin
+        else if(sqrt_42_3<=x && x<sqrt_42_4)
+		begin
             s8f[0]=sqrt_42_3;
             s8f[1]=sqrt_42_5;
             s8f[2]=sqrt_42_1;
             s8f[3]=sqrt_42_7;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
 		end
-        else if(sqrt_42_2<=x && x<sqrt_42_3)begin
+        else if(sqrt_42_2<=x && x<sqrt_42_3)
+		begin
             s8f[0]=sqrt_42_3;
             s8f[1]=sqrt_42_1;
             s8f[2]=sqrt_42_5;
             s8f[3]=sqrt_42_1_m;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
 		end
-        else if(sqrt_42_1<=x && x<sqrt_42_2)begin    
+        else if(sqrt_42_1<=x && x<sqrt_42_2)
+		begin    
             s8f[0]=sqrt_42_1;
             s8f[1]=sqrt_42_3;
             s8f[2]=sqrt_42_1_m;
             s8f[3]=sqrt_42_5; 
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-				end
-        else if(0<=x && x<sqrt_42_1) begin    
+		end
+        else if(0<=x && x<sqrt_42_1) 
+		begin    
             s8f[0]=sqrt_42_1;
             s8f[1]=sqrt_42_1_m;
             s8f[2]=sqrt_42_3;
             s8f[3]=sqrt_42_3_m;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-			end
+		end
 		
-        else if(sqrt_42_1_m<=x && x<0) begin    
+        else if(sqrt_42_1_m<=x && x<0) 
+		begin    
             s8f[0]=sqrt_42_1_m;
             s8f[1]=sqrt_42_1;
             s8f[2]=sqrt_42_3_m;
             s8f[3]=sqrt_42_3; 
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-			end
-        else if(x<=sqrt_42_1_m && x>sqrt_42_2_m) begin    
+		end
+        else if(x<=sqrt_42_1_m && x>sqrt_42_2_m) 
+		begin    
             s8f[0]=sqrt_42_1_m;
             s8f[1]=sqrt_42_3_m;
             s8f[2]=sqrt_42_1;
             s8f[3]=sqrt_42_5_m;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-			end
-        else if(x<=sqrt_42_2_m && x>sqrt_42_3_m) begin      
+		end
+        else if(x<=sqrt_42_2_m && x>sqrt_42_3_m) 
+		begin      
             s8f[0]=sqrt_42_3_m;
             s8f[1]=sqrt_42_1_m;
             s8f[2]=sqrt_42_5_m;
             s8f[3]=sqrt_42_1; 
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-end			
-        else if(x<=sqrt_42_3_m && x>sqrt_42_4_m)  begin 
+        end			
+        else if(x<=sqrt_42_3_m && x>sqrt_42_4_m)  
+		begin 
             s8f[0]=sqrt_42_3_m;
             s8f[1]=sqrt_42_5_m;
             s8f[2]=sqrt_42_1_m;
             s8f[3]=sqrt_42_7_m;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-			end
-        else if(x<=sqrt_42_4_m && x>sqrt_42_5_m)begin    
+		end
+        else if(x<=sqrt_42_4_m && x>sqrt_42_5_m)
+		begin    
             s8f[0]=sqrt_42_5_m;
             s8f[1]=sqrt_42_3_m;
             s8f[2]=sqrt_42_7_m;
             s8f[3]=sqrt_42_1_m;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-			end
-        else if(x<=sqrt_42_5_m && x>sqrt_42_6_m)   begin  
+		end
+        else if(x<=sqrt_42_5_m && x>sqrt_42_6_m)   
+		begin  
             s8f[0]=sqrt_42_5_m;
             s8f[1]=sqrt_42_7_m;
             s8f[2]=sqrt_42_3_m;
             s8f[3]=sqrt_42_1_m;
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};
-			end
-        else if(x<sqrt_42_6_m)  begin   
+		end
+        else if(x<sqrt_42_6_m)  
+		begin   
             s8f[0]=sqrt_42_7_m;
             s8f[1]=sqrt_42_5_m;
             s8f[2]=sqrt_42_3_m;
             s8f[3]=sqrt_42_1_m; 
 			eli = {s8f[3],s8f[2],s8f[1],s8f[0]};			
-			end			
-        else begin
+		end			
+        else 
+		begin
 		s8f[0] = s8f[0];
 		s8f[1] = s8f[1];
 		s8f[2] = s8f[2];
@@ -286,9 +311,79 @@ end
 	
 endfunction
 /////////////////////////////////////////////
+
+/////////////////////////////////////////////
+function [11:0]mul;
+input [11:0]a,b;
+reg [21:0]ab;
+reg [21:0]mul_reg;
+//取最後11:0bit
+begin
+
+if(a[11]==1'b0&& b[11]==1'b0)begin
+		ab = a[10:0]*b[10:0];
+		mul_reg = ab>>8;
+		mul ={1'b0, mul_reg[10:0]};
+	end
+	else if(a[11]==1'b0&& b[11]==1'b1)begin
+		b = ~(b - 1'b1);
+		ab = a[10:0]*b[10:0];
+		mul_reg = ab>>8;
+		mul = ~{1'b0, mul_reg[10:0]}+1'b1;
+	end
+	else if(a[11]==1'b1&& b[11]==1'b0)begin
+		a = ~(a - 1'b1);
+		ab = a[10:0]*b[10:0];//正數相家
+		mul_reg = ab>>8;
+		mul = ~{1'b0, mul_reg[10:0]}+1'b1;
+	end
+	else if(a[11]==1'b1&& b[11]==1'b1)begin
+		a = ~(a - 1'b1);
+		b = ~(b - 1'b1);
+		ab = a[10:0]*b[10:0];
+		mul_reg = ab>>8;
+		mul ={1'b0, mul_reg[10:0]};
+	end
+
 end
+endfunction
 
 
+/////////////////////////////////////////////
+function [11:0]div;
+input [11:0]c,d;
+reg [10:0]c_div_d;
 
+//取最後11:0dit
+begin
+
+if(c[11]==1'd0&& d[11]==1'd0)
+    begin
+		c_div_d = c[10:0]/d[10:0];
+		div ={1'd0, c_div_d [10:0]};
+	end
+	else if(c[11]==1'd0&& d[11]==1'd1)
+	begin
+		d = ~(d - 1'd1);
+		c_div_d = c[10:0]/d[10:0];
+		div = ~{1'd0, c_div_d [10:0]}+1'd1;
+	end
+	else if(c[11]==1'd1&& d[11]==1'd0)
+	begin
+		c = ~(c - 1'd1);
+		c_div_d = c[10:0]/d[10:0];//正數相家
+		div = ~{1'd0, c_div_d [10:0]}+1'd1;
+	end
+	else if(c[11]==1'd1&& d[11]==1'd1)
+	begin
+		c = ~(c - 1'd1);
+		d = ~(d - 1'd1);
+		c_div_d = c[10:0]/d[10:0];
+		div ={1'd0, c_div_d [10:0]};
+	end
+
+end
+endfunction
+////////////////////////////////////////////
 
 endmodule
